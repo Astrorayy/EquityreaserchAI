@@ -10,6 +10,7 @@ numpy>=1.26,<3              # numeric core
 plotly>=5.20,<7             # interactive charts
 requests>=2.31,<3           # HTTP client (SEC EDGAR, IR pages, LLM APIs)
 beautifulsoup4>=4.12,<5     # HTML table parsing
+ddgs>=9.0                   # keyless web search (DuckDuckGo + fallback backends)
 pymupdf>=1.24,<2            # PDF text extraction (fast, no Java)
 pdfplumber>=0.11,<1         # PDF table extraction (fallback)
 python-dotenv>=1.0,<2       # .env configuration

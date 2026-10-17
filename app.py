@@ -50,6 +50,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("app")
 
+# Public search backends log one INFO line per HTTP response; keep the terminal
+# readable while preserving warnings and errors.
+for _noisy in ("primp", "ddgs", "httpx"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 #: Numeric multipliers for the reporting scales a document can use.  Kept here
 #: (and not inferred) because reading "1 234" as millions instead of thousands is
 #: a factor-1 000 error nobody notices in a finished table.
@@ -2219,8 +2224,8 @@ def page_sources() -> None:
     sources = repo.list_sources(db(), profile.company_id)
     quality = workflows.assess(dataset) if dataset.observations else None
 
-    tab_sources, tab_quality, tab_coverage, tab_overrides = st.tabs(
-        ["Documents sources", "Contrôles", "Couverture", "Saisies manuelles"]
+    tab_sources, tab_quality, tab_coverage, tab_overrides, tab_web = st.tabs(
+        ["Documents sources", "Contrôles", "Couverture", "Saisies manuelles", "Recherche web"]
     )
 
     with tab_sources:
@@ -2310,8 +2315,102 @@ def page_sources() -> None:
                     st.success(f"{field} = {parsed:,.4f} enregistré.")
                     st.rerun()
 
+    with tab_web:
+        _web_search_section(profile)
+
     st.divider()
     _report_section(profile, dataset)
+
+
+def _web_search_section(profile: CompanyProfile) -> None:
+    """Tier-2 web leads: titles, URLs and raw snippets — never figures."""
+    from data_sources.web_search import get_search_provider, research_brief
+
+    app_settings = settings()
+    if not app_settings.search_enabled:
+        st.info(
+            "La recherche web est désactivée. Renseignez `ERAI_SEARCH_PROVIDER=duckduckgo` "
+            "(gratuit, sans clé) dans le fichier `.env`, puis relancez l'application. "
+            "Les autres fournisseurs sont décrits dans la page Paramètres."
+        )
+        return
+
+    st.caption(
+        "Pistes issues de moteurs publics (Tier 2) : titres, URL et extraits bruts. "
+        "Ce ne sont pas des chiffres officiels — vérifiez la valeur dans le document "
+        "source avant toute utilisation. Les résultats ne sont pas enregistrés en base."
+    )
+    default_query = f"{profile.name} résultats financiers {_dt.date.today().year}"
+    configured_max = int(getattr(app_settings, "search_max_results", 8) or 8)
+    with st.form("web_search_form"):
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            query = st.text_input("Requête de recherche", value=default_query)
+        with col2:
+            max_results = int(
+                st.number_input(
+                    "Résultats max",
+                    min_value=3,
+                    max_value=15,
+                    value=min(max(configured_max, 3), 15),
+                    step=1,
+                )
+            )
+        brief = st.checkbox(
+            "Lancer le brief complet (4 requêtes standard : résultats, guidance, "
+            "marché, risques)",
+            value=False,
+        )
+        submitted = st.form_submit_button("Rechercher")
+
+    state_key = f"web_search_results_{profile.company_id}"
+    if submitted:
+        provider = get_search_provider(app_settings)
+        try:
+            with st.spinner("Recherche en cours…"):
+                if brief:
+                    responses = research_brief(
+                        profile.name, getattr(profile, "sector", None) or "", settings=app_settings
+                    )
+                else:
+                    responses = [provider.search(query, max_results=max_results)]
+        except Exception as exc:  # provider/network errors are surfaced, never hidden
+            logger.warning("Recherche web échouée : %s", exc)
+            st.error(f"Recherche impossible : {exc}")
+            return
+        st.session_state[state_key] = [
+            {
+                "query": response.query,
+                "provider": response.provider,
+                "error": response.error,
+                "note": response.note,
+                "results": list(response.results),
+            }
+            for response in responses
+        ]
+
+    stored = st.session_state.get(state_key)
+    if not stored:
+        st.caption(
+            "Saisissez une requête puis cliquez sur « Rechercher ». Les pistes "
+            "s'affichent ici avec leur URL, sans être versées dans la base."
+        )
+        return
+    for response in stored:
+        if len(stored) > 1:
+            st.markdown(f"**Requête : {response['query']}**")
+        if response["error"]:
+            st.warning(f"Fournisseur « {response['provider']} » : {response['error']}")
+            continue
+        if not response["results"]:
+            st.warning(response["note"] or "Aucun résultat.")
+            continue
+        show_frame(C.web_results_frame(response["results"]))
+        st.caption(
+            f"Fournisseur : {response['provider']} — pistes non vérifiées. Pour "
+            "utiliser un chiffre repéré ici : ouvrez le document, vérifiez la valeur, "
+            "puis saisissez-la (onglet « Saisies manuelles ») en conservant sa source."
+        )
 
 
 def _source_form(profile: CompanyProfile) -> None:

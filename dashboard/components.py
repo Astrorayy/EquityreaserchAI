@@ -280,6 +280,26 @@ def sources_frame(sources: Sequence[SourceRecord]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=columns)
 
 
+def web_results_frame(results: Sequence[object]) -> pd.DataFrame:
+    """Table of Tier-2 search leads.
+
+    These are never figures: the frame deliberately shows the URL and the raw
+    snippet so the analyst verifies the source before using anything.
+    """
+    columns = ["Rang", "Titre", "Extrait", "URL", "Fournisseur"]
+    rows = [
+        {
+            "Rang": getattr(item, "rank", MISSING_GLYPH) or MISSING_GLYPH,
+            "Titre": getattr(item, "title", None) or MISSING_GLYPH,
+            "Extrait": (getattr(item, "snippet", None) or MISSING_GLYPH),
+            "URL": getattr(item, "url", None) or MISSING_GLYPH,
+            "Fournisseur": getattr(item, "provider", None) or MISSING_GLYPH,
+        }
+        for item in results
+    ]
+    return pd.DataFrame(rows, columns=columns)
+
+
 def missing_items(dataset: FinancialDataSet, items: Sequence[LineItem]) -> List[str]:
     """Human-readable list of the requested items with no value at the latest period."""
     latest = dataset.latest_period_label()

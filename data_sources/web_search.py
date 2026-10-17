@@ -122,10 +122,12 @@ class NullSearchProvider(SearchProvider):
 
 
 class DuckDuckGoProvider(SearchProvider):
-    """Scrapes the public ``html.duckduckgo.com`` result page.
+    """Keyless web search via the ``ddgs`` package, with an HTML fallback.
 
-    No API key and no paid tier, but the endpoint is not contractual: it can
-    change or rate limit at any time, hence the best-effort error handling.
+    ``ddgs`` rotates across several public backends when one of them returns an
+    anti-bot page; this is what makes the keyless mode usable in practice.  If
+    the package is not installed, the provider falls back to scraping the
+    public ``html.duckduckgo.com`` endpoint (best effort).
     """
 
     name = "duckduckgo"
@@ -135,8 +137,40 @@ class DuckDuckGoProvider(SearchProvider):
     def available(self) -> bool:
         return True
 
+    def _search_with_ddgs(self, query: str, limit: int) -> List[SearchResult]:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            return []
+        # Public endpoints rate-limit aggressively and unpredictably.  Yahoo is
+        # the most stable backend from our measurements; DuckDuckGo is used as
+        # a second opinion, then each is retried alone.
+        for backend in ("yahoo,duckduckgo", "yahoo", "duckduckgo"):
+            try:
+                raw = DDGS().text(query, max_results=limit, backend=backend)
+            except Exception:
+                continue
+            results = [
+                SearchResult(
+                    title=str(item.get("title", "")),
+                    url=str(item.get("href") or item.get("url", "")),
+                    snippet=str(item.get("body", ""))[:500],
+                    provider=self.name,
+                    rank=rank,
+                )
+                for rank, item in enumerate(raw or [], start=1)
+                if item.get("href") or item.get("url")
+            ]
+            if results:
+                return results
+        return []
+
     def search(self, query: str, max_results: Optional[int] = None) -> SearchResponse:
         limit = max_results or self.settings.search_max_results
+        packaged = self._search_with_ddgs(query, limit)
+        if packaged:
+            return SearchResponse(query=query, provider=self.name, results=packaged)
+
         url = f"{self.ENDPOINT}?{urlencode({'q': query})}"
         response = self.http.get(url, extra_headers={"Accept": "text/html"})
         if not response.ok:
@@ -178,8 +212,10 @@ class DuckDuckGoProvider(SearchProvider):
         note = None
         if not results:
             note = (
-                "Aucun résultat analysé. DuckDuckGo a peut-être renvoyé une page de "
-                "vérification anti-robot, ou modifie son balisage HTML."
+                "Aucun résultat obtenu : les moteurs publics limitent parfois le débit "
+                "de façon temporaire. Réessayez dans quelques instants. Pour une "
+                "recherche plus stable, configurez un fournisseur avec clé "
+                "(tavily, brave ou serper) dans .env."
             )
         return SearchResponse(query=query, provider=self.name, results=results, note=note)
 

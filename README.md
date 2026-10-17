@@ -88,7 +88,7 @@ Toutes les variables sont **optionnelles**. Voir `.env.example` pour la liste co
 | `ERAI_DATA_DIR` | `./data` | Base SQLite, cache HTTP et rapports. |
 | `ERAI_HTTP_TIMEOUT` | `20` | Délai HTTP (secondes). |
 | `ERAI_SEC_USER_AGENT` | prototype | `User-Agent` SEC avec e-mail de contact. |
-| `ERAI_SEARCH_PROVIDER` | `none` | `none` / `duckduckgo` / `tavily` / `brave` / `serper`. |
+| `ERAI_SEARCH_PROVIDER` | `none` | `duckduckgo` (sans clé), ou `tavily` / `brave` / `serper` (clé requise). |
 | `ERAI_SEARCH_API_KEY` | — | Clé du fournisseur de recherche (sauf DuckDuckGo). |
 | `ERAI_LLM_BASE_URL` | OpenAI | Tout point d'accès compatible *chat completions*. |
 | `ERAI_LLM_API_KEY` | — | **Vide = assistant IA désactivé.** |
@@ -99,6 +99,21 @@ Toutes les variables sont **optionnelles**. Voir `.env.example` pour la liste co
 Exemples de fournisseurs à petit budget / offre gratuite : Groq, Google Gemini,
 OpenRouter, Mistral, ou Ollama en local (`http://localhost:11434/v1`).
 L'interface LLM est indépendante du fournisseur (API compatible OpenAI).
+
+### Activer la recherche web
+
+La recherche web est **optionnelle** et désactivée par défaut. Pour l'activer :
+
+- **Sans clé API (le plus simple)** : `ERAI_SEARCH_PROVIDER=duckduckgo`.
+  L'application utilise le paquet `ddgs` (installé par `requirements.txt`), qui
+  interroge plusieurs moteurs publics. Ces moteurs limitent parfois le débit :
+  un échec temporaire est signalé, il suffit de réessayer.
+- **Avec clé API (plus stable)** : `ERAI_SEARCH_PROVIDER=tavily` (offre gratuite),
+  `brave` ou `serper`, et renseignez `ERAI_SEARCH_API_KEY`.
+
+Les résultats de recherche sont toujours présentés comme des **pistes** avec leur
+URL, jamais comme des chiffres officiels : ils doivent être vérifiés dans le
+document source avant toute utilisation.
 
 ---
 
