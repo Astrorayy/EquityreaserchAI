@@ -1,0 +1,13 @@
+# Optional dependencies - the application works without them.
+#
+# Install with:
+#   .venv\Scripts\python -m pip install -r requirements-optional.txt
+#
+# yfinance: indicative historical market prices for US tickers.
+#   WARNING - unofficial/unlicensed data source, for indicative use only.
+#   It pulls a fairly heavy dependency tree (curl_cffi, peewee, lxml...).
+#   The application degrades gracefully when it is absent.
+yfinance>=0.2.40
+
+# lxml: faster HTML/XML parsing used by the SEC XBRL helpers.
+lxml>=5.0

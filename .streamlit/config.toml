@@ -1,0 +1,22 @@
+# Streamlit configuration — "research terminal" look.
+# Dark base, restrained accent colours, no telemetry.
+
+[theme]
+base = "dark"
+primaryColor = "#4c8dff"
+backgroundColor = "#0b1220"
+secondaryBackgroundColor = "#111a2e"
+textColor = "#e2e8f0"
+font = "sans serif"
+
+[server]
+headless = true
+maxUploadSize = 80
+enableStaticServing = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true
