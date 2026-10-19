@@ -115,6 +115,33 @@ Les résultats de recherche sont toujours présentés comme des **pistes** avec 
 URL, jamais comme des chiffres officiels : ils doivent être vérifiés dans le
 document source avant toute utilisation.
 
+### Déploiement sur Streamlit Community Cloud
+
+Le dépôt ne contient **pas** `.env` (volontairement ignoré). Sur Streamlit Cloud, la
+configuration se fait dans **Manage app → Settings → Secrets**, au format TOML :
+
+```toml
+ERAI_SEARCH_PROVIDER = "duckduckgo"
+
+# Optionnel — assistant IA
+# ERAI_LLM_BASE_URL = "https://api.groq.com/openai/v1"
+# ERAI_LLM_API_KEY = "..."
+# ERAI_LLM_MODEL = "..."
+```
+
+Ces secrets sont lus au démarrage et exposés comme variables d'environnement
+(`config.apply_streamlit_secrets`), sans jamais écraser `.env` ni l'environnement local.
+
+Après un `git push`, Streamlit Cloud reconstruit normalement l'application. Si ce n'est
+pas le cas : **Manage app → ⋮ → Reboot app**, et vérifiez que la branche déployée est
+`main` avec `app.py` comme fichier principal. Le nouvel onglet **Sources → Recherche web**
+et la ligne « Recherche web » de la page **Paramètres** confirment que le code déployé
+est à jour.
+
+> La base SQLite et les rapports vivent dans le système de fichiers éphémère de
+> Streamlit Cloud : ils sont réinitialisés à chaque redémarrage. Exportez les rapports
+> ou utilisez un stockage externe si vous devez conserver les données.
+
 ---
 
 ## 4. Méthodologie et garde-fous

@@ -2330,8 +2330,10 @@ def _web_search_section(profile: CompanyProfile) -> None:
     if not app_settings.search_enabled:
         st.info(
             "La recherche web est désactivée. Renseignez `ERAI_SEARCH_PROVIDER=duckduckgo` "
-            "(gratuit, sans clé) dans le fichier `.env`, puis relancez l'application. "
-            "Les autres fournisseurs sont décrits dans la page Paramètres."
+            "(gratuit, sans clé) dans le fichier `.env` en local, ou dans les **secrets** "
+            "Streamlit (Manage app → Settings → Secrets) sur Streamlit Cloud, puis "
+            "redémarrez l'application. Les autres fournisseurs sont décrits dans la page "
+            "Paramètres."
         )
         return
 
@@ -2466,7 +2468,7 @@ def page_settings() -> None:
         ("Assistant IA", "activé" if app_settings.ai_enabled else "désactivé",
          f"{app_settings.llm_model} via {app_settings.llm_base_url}" if app_settings.ai_enabled else "renseignez ERAI_LLM_API_KEY"),
         ("Recherche web", app_settings.search_provider if app_settings.search_enabled else "désactivée",
-         "ERAI_SEARCH_PROVIDER" if not app_settings.search_enabled else f"maximum {app_settings.search_max_results} résultats"),
+         "via .env ou secrets Streamlit : ERAI_SEARCH_PROVIDER" if not app_settings.search_enabled else f"maximum {app_settings.search_max_results} résultats"),
         ("Données de marché US (yfinance)", "disponible" if yfinance_ok else "non installé",
          "source non officielle, indicative" if yfinance_ok else "pip install -r requirements-optional.txt"),
         ("User-Agent SEC", "configuré" if "example.com" not in app_settings.sec_user_agent else "valeur d'exemple",
@@ -2475,6 +2477,12 @@ def page_settings() -> None:
         ("Base de données", app_settings.db_path.name, str(app_settings.db_path.parent)),
     ]
     show_frame(pd.DataFrame(rows, columns=["Élément", "État", "Détail"]))
+    st.caption(
+        "Configuration : en local, fichier `.env` (non versionné). Sur Streamlit Cloud : "
+        "Manage app → Settings → Secrets, au format TOML — par exemple "
+        "`ERAI_SEARCH_PROVIDER = \"duckduckgo\"`. Les variables déjà présentes dans "
+        "l'environnement restent prioritaires."
+    )
 
     if app_settings.ai_enabled:
         col1, col2 = st.columns([1, 3])

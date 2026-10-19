@@ -8,6 +8,7 @@ application runs with an empty environment.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -45,6 +46,53 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def _streamlit_secret_values() -> dict[str, str]:
+    """Read top-level ``ERAI_*`` keys from Streamlit's secret store.
+
+    Streamlit Community Cloud exposes configuration through ``st.secrets`` and
+    does **not** create environment variables.  The import is lazy and only
+    attempted when Streamlit is already loaded (the app, AppTest), so command
+    line tools and unit tests never pay for it.
+    """
+    if "streamlit" not in sys.modules:
+        return {}
+    try:
+        import streamlit as st
+
+        try:
+            secrets = st.secrets
+        except Exception:
+            return {}
+        values: dict[str, str] = {}
+        for key, value in secrets.items():
+            if (
+                isinstance(key, str)
+                and key.startswith("ERAI_")
+                and isinstance(value, (str, int, float, bool))
+            ):
+                text = str(value).strip()
+                if text:
+                    values[key] = text
+        return values
+    except Exception:
+        return {}
+
+
+def apply_streamlit_secrets() -> int:
+    """Copy Streamlit secrets into the environment without overwriting anything.
+
+    Local ``.env`` values and real environment variables keep priority; on
+    Streamlit Cloud (where neither exists) the secrets become visible to every
+    module that reads ``os.getenv``.  Returns the number of variables added.
+    """
+    added = 0
+    for key, value in _streamlit_secret_values().items():
+        if not os.getenv(key):
+            os.environ[key] = value
+            added += 1
+    return added
 
 
 @dataclass(frozen=True)
@@ -102,6 +150,7 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    apply_streamlit_secrets()
     data_dir_raw = os.getenv("ERAI_DATA_DIR", "./data").strip() or "./data"
     data_dir = Path(data_dir_raw)
     if not data_dir.is_absolute():
