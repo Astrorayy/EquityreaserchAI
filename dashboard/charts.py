@@ -37,18 +37,22 @@ from financial_engine.sensitivity import SensitivityGrid, TornadoResult
 # Palette / layout
 # --------------------------------------------------------------------------
 
-INK = "#0b1220"          # page background (dark terminal)
-PANEL = "#111a2e"        # panel background
-GRID = "#233149"         # gridlines
-TEXT = "#e2e8f0"
-MUTED = "#94a3b8"
-BLUE = "#4c8dff"
-GOLD = "#e0b542"
-GREEN = "#34d399"
-RED = "#f87171"
-AMBER = "#fbbf24"
-VIOLET = "#a78bfa"
-CYAN = "#22d3ee"
+INK = "#ffffff"          # card background (charts sit on white cards)
+PANEL = "#ffffff"        # panel background
+GRID = "#e9ecf3"         # gridlines
+AXIS = "#d5d9e4"
+TEXT = "#0e1318"
+MUTED = "#6b7280"
+BLUE = "#7d2ae8"         # primary series (Canva purple)
+GOLD = "#ffb020"
+GOLD_TEXT = "#b26a00"    # readable amber for annotation text on white
+GREEN = "#22c55e"
+GREEN_TEXT = "#0f9d58"
+RED = "#f43f5e"
+AMBER = "#ff7a59"
+VIOLET = "#a855f7"
+CYAN = "#00c4cc"
+FONT_FAMILY = "'Plus Jakarta Sans', Inter, 'Segoe UI', sans-serif"
 
 SCENARIO_COLORS = {
     "bear": RED,
@@ -79,27 +83,54 @@ def _layout(
     note: Optional[str] = None,
 ) -> Dict[str, object]:
     if note:
-        title = f"{title}<br><sup>{note}</sup>"
+        title = (
+            f"{title}<br><span style='font-size:11.5px;color:{MUTED};font-weight:400'>"
+            f"{note}</span>"
+        )
     return {
-        "title": {"text": title, "font": {"size": 16, "color": TEXT}, "x": 0.01, "xanchor": "left"},
+        "title": {
+            "text": title,
+            "font": {"size": 15, "color": TEXT, "family": FONT_FAMILY, "weight": 700},
+            "x": 0.01,
+            "xanchor": "left",
+        },
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "rgba(0,0,0,0)",
-        "font": {"color": TEXT, "family": "Segoe UI, Roboto, Helvetica, Arial, sans-serif", "size": 12},
+        "font": {"color": TEXT, "family": FONT_FAMILY, "size": 12},
+        # French number formatting: decimal comma, thin-space thousands.
+        "separators": ", ",
         "height": height,
-        "margin": {"l": 60, "r": 30, "t": 60, "b": 50},
+        "margin": {"l": 56, "r": 24, "t": 64, "b": 44},
         "hovermode": "x unified",
+        "hoverlabel": {
+            "bgcolor": "#ffffff",
+            "bordercolor": "#e3e6ef",
+            "font": {"family": FONT_FAMILY, "color": TEXT, "size": 12},
+        },
+        "barcornerradius": 6,
+        "bargap": 0.28,
+        "transition": {"duration": 450, "easing": "cubic-in-out"},
+        "dragmode": "zoom",
         "xaxis": {
             "title": {"text": x_title, "font": {"size": 12, "color": MUTED}},
-            "gridcolor": GRID,
-            "zerolinecolor": GRID,
-            "linecolor": GRID,
+            "gridcolor": "rgba(0,0,0,0)",
+            "zerolinecolor": AXIS,
+            "linecolor": AXIS,
+            "showline": True,
+            "ticks": "",
             "tickfont": {"color": MUTED},
+            "showspikes": True,
+            "spikecolor": "rgba(125, 42, 232, 0.45)",
+            "spikethickness": 1,
+            "spikedash": "dot",
+            "spikemode": "across",
         },
         "yaxis": {
             "title": {"text": y_title, "font": {"size": 12, "color": MUTED}},
             "gridcolor": GRID,
-            "zerolinecolor": GRID,
-            "linecolor": GRID,
+            "griddash": "dot",
+            "zerolinecolor": AXIS,
+            "linecolor": "rgba(0,0,0,0)",
             "tickfont": {"color": MUTED},
         },
         "showlegend": legend,
@@ -113,6 +144,21 @@ def _layout(
         },
         "colorway": SEQUENCE,
     }
+
+
+def polish(fig: go.Figure) -> go.Figure:
+    """Uniform finishing touches; never changes the plotted values."""
+    fig.update_traces(
+        selector={"type": "scatter"},
+        line={"width": 2.6},
+        marker={"size": 7, "line": {"width": 1.5, "color": "#ffffff"}},
+    )
+    fig.update_traces(
+        selector={"type": "bar"},
+        marker_line_width=0,
+        opacity=0.92,
+    )
+    return fig
 
 
 def _period_frame(dataset: FinancialDataSet, items: Sequence[LineItem]) -> pd.DataFrame:
@@ -430,7 +476,7 @@ def scenario_comparison(results: Sequence[DCFResult], current_price: Optional[fl
             line={"color": GOLD, "width": 2, "dash": "dash"},
             annotation_text=f"Cours actuel {current_price:,.2f}",
             annotation_position="top left",
-            annotation_font={"color": GOLD},
+            annotation_font={"color": GOLD_TEXT},
         )
     layout = _layout(
         "Valeur par action par scénario",
@@ -459,15 +505,15 @@ def sensitivity_heatmap(grid: SensitivityGrid) -> go.Figure:
             x=[f"{c:.2%}" for c in grid.col_values],
             y=[f"{r:.2%}" for r in grid.row_values],
             colorscale=[
-                [0.0, "#7f1d1d"],
-                [0.25, "#b45309"],
-                [0.5, INK],
-                [0.75, "#1d4ed8"],
-                [1.0, "#065f46"],
+                [0.0, "#f8b4bf"],
+                [0.25, "#ffe2b8"],
+                [0.5, "#ffffff"],
+                [0.75, "#bfdcfd"],
+                [1.0, "#b6ecd0"],
             ],
             text=text,
             texttemplate="%{text}",
-            textfont={"size": 11},
+            textfont={"size": 11, "color": TEXT},
             colorbar={"title": {"text": "Ach/action", "side": "right"}, "tickfont": {"color": MUTED}},
             hoverongaps=False,
             hovertemplate=(
@@ -528,7 +574,7 @@ def tornado_chart(tornado: TornadoResult) -> go.Figure:
         x=base,
         line={"color": GOLD, "width": 2, "dash": "dash"},
         annotation_text=f"Base {base:,.2f}",
-        annotation_font={"color": GOLD},
+        annotation_font={"color": GOLD_TEXT},
     )
     layout = _layout(
         "Sensibilité de la valeur par action aux hypothèses clés",
@@ -624,14 +670,14 @@ def valuation_range(result: MultiplesResult) -> go.Figure:
             x=result.median_implied_value,
             line={"color": GOLD, "width": 2, "dash": "dash"},
             annotation_text=f"Médiane {result.median_implied_value:,.2f}",
-            annotation_font={"color": GOLD},
+            annotation_font={"color": GOLD_TEXT},
         )
     if result.target.current_price:
         fig.add_vline(
             x=result.target.current_price,
             line={"color": GREEN, "width": 2, "dash": "dot"},
             annotation_text=f"Cours {result.target.current_price:,.2f}",
-            annotation_font={"color": GREEN},
+            annotation_font={"color": GREEN_TEXT},
         )
     layout = _layout(
         "Valeur par action implicite par multiple",
@@ -665,7 +711,7 @@ def cycle_normalisation_chart(cycle: CycleNormalisation) -> go.Figure:
             y=cycle.mid_cycle_margin * 100,
             line={"color": GOLD, "width": 2, "dash": "dash"},
             annotation_text=f"Marge médiane de cycle {cycle.mid_cycle_margin:.1%}",
-            annotation_font={"color": GOLD},
+            annotation_font={"color": GOLD_TEXT},
         )
     if cycle.latest_margin is not None:
         fig.add_scatter(

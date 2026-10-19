@@ -21,7 +21,7 @@ import pandas as pd
 import streamlit as st
 
 from config import get_settings
-from dashboard import charts, components as C
+from dashboard import charts, components as C, theme
 from data_sources.company_registry import (
     get_profile,
     list_profiles,
@@ -76,14 +76,14 @@ PAGES = (
     "settings",
 )
 PAGE_ICONS = {
-    "dashboard": "▦",
-    "research": "◱",
-    "statements": "▤",
-    "valuation": "∑",
-    "comparables": "⚖",
-    "assistant": "✦",
-    "sources": "⛁",
-    "settings": "⚙",
+    "dashboard": ":material/space_dashboard:",
+    "research": ":material/apartment:",
+    "statements": ":material/table_chart:",
+    "valuation": ":material/calculate:",
+    "comparables": ":material/compare_arrows:",
+    "assistant": ":material/auto_awesome:",
+    "sources": ":material/verified:",
+    "settings": ":material/tune:",
 }
 
 
@@ -98,44 +98,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-CUSTOM_CSS = """
-<style>
-    .block-container { padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1500px; }
-    h1, h2, h3 { letter-spacing: .01em; }
-    /* KPI strip */
-    .erai-kpi {
-        border: 1px solid #233149; border-radius: 10px; padding: 10px 14px;
-        background: linear-gradient(180deg, #131d33 0%, #0e1729 100%);
-        height: 100%;
-    }
-    .erai-kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
-    .erai-kpi .value { font-size: 21px; font-weight: 600; margin-top: 2px; }
-    .erai-kpi .sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
-    /* Status pills */
-    .erai-pill {
-        display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 11px;
-        border: 1px solid #2c3a55; color: #cbd5e1; background: #131d33; margin-right: 6px;
-    }
-    .erai-pill.ok { color: #6ee7b7; border-color: #14532d; background: #052e1b; }
-    .erai-pill.warn { color: #fcd34d; border-color: #713f12; background: #2a1d05; }
-    .erai-pill.bad { color: #fca5a5; border-color: #7f1d1d; background: #2a0a0a; }
-    .erai-pill.info { color: #93c5fd; border-color: #1e3a8a; background: #0b1930; }
-    /* Provenance line under a figure */
-    .erai-prov { font-size: 11.5px; color: #8ba0bd; margin-top: -6px; }
-    .erai-section {
-        border-left: 3px solid #4c8dff; padding-left: 10px; margin: 6px 0 14px;
-    }
-    .erai-quote { background:#111a2e; border-left:3px solid #a78bfa; padding:10px 14px;
-                  border-radius:6px; font-size:13px; }
-    .erai-warn { background:#2a1d05; border-left:3px solid #fbbf24; padding:10px 14px;
-                 border-radius:6px; font-size:12.5px; }
-    .erai-danger { background:#2a0a0a; border-left:3px solid #f87171; padding:10px 14px;
-                   border-radius:6px; font-size:12.5px; }
-    .erai-tool { font-size:12px; color:#8ba0bd; font-family: ui-monospace, Consolas, monospace; }
-</style>
-"""
-
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+st.markdown(theme.CSS, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner=False)
@@ -193,27 +156,73 @@ def current_profile() -> Optional[CompanyProfile]:
 
 
 def sales_pitch_note() -> None:
-    st.caption(C.DISCLAIMER.replace("**", ""))
+    st.markdown(theme.footer(C.DISCLAIMER.replace("**", "")), unsafe_allow_html=True)
 
 
 def pill(text: str, kind: str = "") -> str:
-    return f'<span class="erai-pill {kind}">{text}</span>'
+    return theme.pill(text, kind)
 
 
-def kpi(label: str, value: str, sub: str = "") -> str:
-    sub_html = f'<div class="sub">{sub}</div>' if sub else ""
-    return (
-        f'<div class="erai-kpi"><div class="label">{label}</div>'
-        f'<div class="value">{value}</div>{sub_html}</div>'
+def kpi(label: str, value: str, sub: str = "", delta: Optional[float] = None,
+        spark: Optional[Sequence[Optional[float]]] = None, invert_delta: bool = False) -> str:
+    return theme.kpi_card(label, value, sub, delta=delta, spark=spark, invert_delta=invert_delta)
+
+
+def kpi_row(items: Sequence[Tuple]) -> None:
+    """Row of KPI cards.  Each item: ``(label, value, sub[, delta[, spark[, invert]]])``."""
+    if not items:
+        return
+    for column, item in zip(st.columns(len(items)), items):
+        label, value, sub, *extra = item
+        delta = extra[0] if len(extra) > 0 else None
+        spark = extra[1] if len(extra) > 1 else None
+        invert = bool(extra[2]) if len(extra) > 2 else False
+        with column:
+            st.markdown(kpi(label, value, sub, delta, spark, invert), unsafe_allow_html=True)
+
+
+def page_header(eyebrow: str, profile: Optional[CompanyProfile] = None,
+                title: Optional[str] = None, subtitle: Optional[str] = None) -> None:
+    """Hero banner shared by every page: section, company, ticker, key facts."""
+    pills_html = ""
+    if profile is not None:
+        facts = [
+            pill(profile.exchange, "info"),
+            pill(profile.currency.value, ""),
+            pill(profile.country, ""),
+        ]
+        if profile.sector:
+            facts.append(pill(profile.sector, ""))
+        dataset = get_dataset(profile.company_id)
+        if workflows.is_simulated(dataset):
+            facts.append(pill("Données simulées", "bad"))
+        elif workflows.has_manual_entries(dataset):
+            facts.append(pill("Saisie manuelle", "warn"))
+        elif dataset.observations:
+            facts.append(pill(f"{len(dataset.periods())} exercice(s) chargés", "ok"))
+        else:
+            facts.append(pill("Aucune donnée chargée", "warn"))
+        pills_html = "".join(facts)
+    st.markdown(
+        theme.hero(
+            eyebrow,
+            title or (profile.name if profile else ""),
+            ticker=profile.ticker if profile else None,
+            subtitle=subtitle,
+            pills_html=pills_html,
+        ),
+        unsafe_allow_html=True,
     )
 
 
-def kpi_row(items: Sequence[Tuple[str, str, str]]) -> None:
-    if not items:
-        return
-    for column, (label, value, sub) in zip(st.columns(len(items)), items):
-        with column:
-            st.markdown(kpi(label, value, sub), unsafe_allow_html=True)
+def section(title: str, subtitle: Optional[str] = None) -> None:
+    st.markdown(theme.section_title(title, subtitle), unsafe_allow_html=True)
+
+
+def go_to(page: str) -> None:
+    """Navigate on the next run (the menu widget is already drawn in this one)."""
+    st.session_state["_pending_page"] = page
+    st.rerun()
 
 
 def show_frame(frame: pd.DataFrame, empty_message: str = "Aucune donnée à afficher.", **kwargs) -> None:
@@ -224,7 +233,17 @@ def show_frame(frame: pd.DataFrame, empty_message: str = "Aucune donnée à affi
 
 
 def chart(fig, caption: Optional[str] = None) -> None:
-    st.plotly_chart(fig, width="stretch", config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
+    st.plotly_chart(
+        charts.polish(fig),
+        width="stretch",
+        config={
+            "displaylogo": False,
+            "displayModeBar": "hover",
+            "responsive": True,
+            "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
+            "toImageButtonOptions": {"format": "png", "scale": 2},
+        },
+    )
     if caption:
         st.markdown(f'<div class="erai-prov">{caption}</div>', unsafe_allow_html=True)
 
@@ -263,8 +282,11 @@ def simulated_banner(dataset: FinancialDataSet) -> None:
 
 def render_sidebar() -> str:
     with st.sidebar:
-        st.markdown("### ◮ Equity Research AI")
-        st.caption("Analyse actions — toute société cotée (Managem et SanDisk préconfigurées)")
+        st.markdown(theme.brand("Recherche actions · toute société cotée"), unsafe_allow_html=True)
+
+        pending_page = st.session_state.pop("_pending_page", None)
+        if pending_page in PAGES:
+            st.session_state["nav_page"] = pending_page
 
         # A company added below is selected on the next run: a widget's state
         # cannot be changed once the widget has been drawn in the current run.
@@ -296,11 +318,13 @@ def render_sidebar() -> str:
                 if options[label] == current:
                     index = i
                     break
+        st.markdown(theme.side_label(t("nav.company")), unsafe_allow_html=True)
         selected_label = st.selectbox(
             t("nav.company"),
             labels,
             index=index,
             key="company_selector",
+            label_visibility="collapsed",
             help="Sociétés vérifiées dans le registre, plus toute société que vous avez ajoutée.",
         )
         selected_id = options[selected_label]
@@ -310,35 +334,32 @@ def render_sidebar() -> str:
                 st.session_state.pop(key, None)
             st.rerun()
 
-        with st.expander("🔎 Rechercher une autre société"):
-            _company_finder()
-        with st.expander("✍️ Ajouter une société manuellement"):
-            _manual_company_form()
-
         profile = current_profile()
         dataset = get_dataset(selected_id) if selected_id else None
         if profile is not None:
-            flags = [
-                pill(profile.currency.value, "info"),
-                pill(profile.exchange, ""),
-            ]
+            flags = [pill(profile.currency.value, "info")]
             if dataset is not None:
                 if workflows.is_simulated(dataset):
-                    flags.append(pill("SIMULÉ", "bad"))
+                    flags.append(pill("Simulé", "bad"))
                 elif workflows.has_manual_entries(dataset):
-                    flags.append(pill("saisie manuelle", "warn"))
+                    flags.append(pill("Saisie manuelle", "warn"))
                 elif dataset.observations:
-                    flags.append(pill("données chargées", "ok"))
+                    flags.append(pill("Données chargées", "ok"))
                 else:
-                    flags.append(pill("aucune donnée", "warn"))
-            st.markdown(" ".join(flags), unsafe_allow_html=True)
+                    flags.append(pill("Aucune donnée", "warn"))
+            subtitle = " · ".join(filter(None, [profile.ticker, profile.exchange, profile.country]))
+            st.markdown(theme.company_card(profile.name, subtitle, "".join(flags)), unsafe_allow_html=True)
 
-        st.divider()
+        with st.expander(":material/travel_explore: Rechercher une société"):
+            _company_finder()
+        with st.expander(":material/edit_note: Ajouter manuellement"):
+            _manual_company_form()
 
         # --- navigation -------------------------------------------------
+        st.markdown(theme.side_label("Navigation"), unsafe_allow_html=True)
         available = {key: f"{PAGE_ICONS[key]}  {t(f'nav.{key}')}" for key in PAGES}
         if profile is not None and dataset is not None and not dataset.observations:
-            available["valuation"] = f"{PAGE_ICONS['valuation']}  {t('nav.valuation')} ⚠"
+            available["valuation"] = f"{PAGE_ICONS['valuation']}  {t('nav.valuation')} ·  :orange[à compléter]"
         page = st.radio(
             "Navigation",
             options=list(available),
@@ -347,8 +368,7 @@ def render_sidebar() -> str:
             key="nav_page",
         )
 
-        st.divider()
-        st.markdown(f"**{t('nav.language')}**")
+        st.markdown(theme.side_label(t("nav.language")), unsafe_allow_html=True)
         lang = st.radio(
             "Langue",
             options=list(SUPPORTED_LANGS),
@@ -362,7 +382,7 @@ def render_sidebar() -> str:
             set_lang(lang)
             st.rerun()
 
-        st.divider()
+        st.markdown(theme.side_label("Services"), unsafe_allow_html=True)
         _sidebar_status()
     return page
 
@@ -488,9 +508,11 @@ def _sidebar_status() -> None:
             "ok" if search_ok else "",
         ),
     ]
-    for label, value, kind in rows:
-        st.markdown(f'<span class="erai-pill {kind}">{label} : {value}</span>', unsafe_allow_html=True)
-    st.caption(f"Base : {app_settings.db_path.name}")
+    st.markdown(
+        "".join(pill(f"{label} : {value}", kind) for label, value, kind in rows),
+        unsafe_allow_html=True,
+    )
+    st.caption(f"Base locale : {app_settings.db_path.name}")
 
 
 # ==========================================================================
@@ -504,23 +526,17 @@ def page_dashboard() -> None:
         return
     dataset = get_dataset(profile.company_id)
 
-    st.markdown(f"## {profile.name}")
-    st.markdown(
-        f'<div class="erai-section">{profile.sector or "secteur non renseigné"} · '
-        f"{profile.exchange} · {profile.country} · reporting en "
-        f"{profile.currency.value} (millions)</div>",
-        unsafe_allow_html=True,
+    page_header(
+        "Tableau de bord",
+        profile,
+        subtitle=f"Reporting en {profile.currency.value}, montants en millions. "
+        "Chaque chiffre renvoie à sa source ; un chiffre absent reste absent.",
     )
     simulated_banner(dataset)
+    _quick_actions(has_data=bool(dataset.observations))
 
     if not dataset.observations:
-        st.markdown(
-            '<div class="erai-warn"><strong>Aucune donnée financière chargée.</strong> '
-            "Rendez-vous dans « États financiers » pour importer les comptes (SEC EDGAR "
-            "pour les valeurs américaines, PDF du rapport annuel, ou saisie manuelle "
-            "explicite).</div>",
-            unsafe_allow_html=True,
-        )
+        section("Commencer l'analyse", "aucune donnée financière chargée pour cette société")
         _dashboard_empty_steps(profile)
         return
 
@@ -551,10 +567,32 @@ def page_dashboard() -> None:
         else None
     )
 
+    revenue_series = list(dataset.series(LineItem.REVENUE).values())
+    income_series = list(dataset.series(LineItem.NET_INCOME).values())
+    ebit_by_period = dataset.series(LineItem.EBIT)
+    margin_series = [
+        (ebit / rev) if (ebit is not None and rev) else None
+        for ebit, rev in zip(ebit_by_period.values(), revenue_series)
+    ]
+    net_income_prev = value(LineItem.NET_INCOME, previous)
+    vs_previous = f"vs {previous}" if previous else ""
+
     kpis = [
-        ("Chiffre d'affaires", C.fmt_number(revenue), f"{latest or '—'} · millions {profile.currency.value}"),
-        ("Résultat net", C.fmt_number(net_income), f"{latest or '—'}"),
-        ("Marge opérationnelle", C.fmt_pct(margin), "EBIT / chiffre d'affaires"),
+        (
+            "Chiffre d'affaires",
+            C.fmt_number(revenue),
+            f"{latest or '—'} · M {profile.currency.value} {vs_previous}".strip(),
+            _yoy(revenue, revenue_prev),
+            revenue_series,
+        ),
+        (
+            "Résultat net",
+            C.fmt_number(net_income),
+            f"{latest or '—'} {vs_previous}".strip(),
+            _yoy(net_income, net_income_prev),
+            income_series,
+        ),
+        ("Marge opérationnelle", C.fmt_pct(margin), "EBIT / chiffre d'affaires", None, margin_series),
         ("Dette nette", C.fmt_number(net_debt), "dette totale − trésorerie"),
         (
             "Capitalisation",
@@ -574,24 +612,28 @@ def page_dashboard() -> None:
         )
     kpi_row(kpis)
 
-    st.divider()
-    left, right = st.columns(2)
-    with left:
+    section("Analyse visuelle", "survolez les graphiques pour le détail, zoomez par glisser")
+    tab_growth, tab_margin, tab_cash, tab_balance = st.tabs(
+        [
+            ":material/trending_up: Croissance",
+            ":material/percent: Rentabilité",
+            ":material/payments: Trésorerie",
+            ":material/account_balance: Bilan",
+        ]
+    )
+    with tab_growth:
         chart(charts.revenue_and_earnings(dataset), C.REPORTED_FIGURES_NOTE)
-    with right:
+    with tab_margin:
         chart(
             charts.margin_trends(dataset),
             "Marge brute / opérationnelle / nette, en % du chiffre d'affaires.",
         )
+    with tab_cash:
+        chart(charts.cash_flow_bars(dataset), C.REPORTED_FIGURES_NOTE)
+    with tab_balance:
+        chart(charts.balance_sheet_trend(dataset), C.REPORTED_FIGURES_NOTE)
 
-    left, right = st.columns(2)
-    with left:
-        chart(charts.cash_flow_bars(dataset))
-    with right:
-        chart(charts.balance_sheet_trend(dataset))
-
-    st.divider()
-    st.markdown("### Qualité des données")
+    section("Qualité des données", "contrôles automatiques sur les comptes chargés")
     status_col, coverage_col = st.columns([1, 2])
     with status_col:
         st.markdown(f"**{C.quality_badge(quality)}**")
@@ -630,25 +672,54 @@ def page_dashboard() -> None:
     sales_pitch_note()
 
 
+def _yoy(current: Optional[float], previous: Optional[float]) -> Optional[float]:
+    """Year-on-year change as a fraction; ``None`` when either side is missing or zero."""
+    if current is None or previous is None or previous == 0:
+        return None
+    return (current - previous) / abs(previous)
+
+
+def _quick_actions(has_data: bool) -> None:
+    """One-click shortcuts to the main workflows."""
+    actions = [
+        ("statements", ":material/upload_file:",
+         "Compléter les comptes" if has_data else "Importer les comptes"),
+        ("valuation", ":material/calculate:", "Valoriser (DCF)"),
+        ("comparables", ":material/compare_arrows:", "Comparer aux pairs"),
+        ("sources", ":material/travel_explore:", "Recherche web"),
+    ]
+    for column, (page, icon, label) in zip(st.columns(len(actions)), actions):
+        with column:
+            if st.button(label, icon=icon, key=f"qa_{page}", width="stretch",
+                         type="primary" if (page == "statements" and not has_data) else "secondary"):
+                go_to(page)
+
+
 def _dashboard_empty_steps(profile: CompanyProfile) -> None:
-    st.markdown("#### Comment charger les comptes")
-    if profile.sec_cik:
-        st.markdown(
-            f"1. **Import automatique SEC EDGAR** (recommandé) — CIK `{profile.sec_cik}`. "
-            "Page *États financiers* → *Importer depuis la SEC*."
-        )
-    else:
-        st.markdown(
-            "1. **Import du rapport annuel** — la page *États financiers* accepte un PDF : "
-            "les tableaux sont extraits, vous confirmez les lignes avant enregistrement."
-        )
-    st.markdown("2. **Saisie manuelle** — pour les chiffres publiés dans un document non lisible par machine.")
+    first = (
+        ("Import automatique SEC EDGAR",
+         f"Recommandé — CIK {profile.sec_cik}. Page États financiers → Importer depuis la SEC.")
+        if profile.sec_cik
+        else ("Import du rapport annuel",
+              "Déposez le PDF dans États financiers : les tableaux sont extraits, vous "
+              "confirmez chaque ligne avant enregistrement.")
+    )
     st.markdown(
-        "3. **Jeu de démonstration simulé** — pour tester les calculs, explicitement étiqueté "
-        "comme non réel."
+        theme.steps(
+            [
+                first,
+                ("Saisie manuelle",
+                 "Pour les chiffres publiés dans un document non lisible par machine ; "
+                 "étiquetés « Saisie manuelle » partout."),
+                ("Jeu de démonstration",
+                 "Données synthétiques pour tester les calculs — explicitement marquées "
+                 "« SIMULÉ »."),
+            ]
+        ),
+        unsafe_allow_html=True,
     )
     if profile.ir_url:
-        st.link_button("Site relations investisseurs", profile.ir_url)
+        st.link_button("Site relations investisseurs", profile.ir_url, icon=":material/open_in_new:")
 
 
 # ==========================================================================
@@ -662,7 +733,7 @@ def page_research() -> None:
         return
     dataset = get_dataset(profile.company_id)
 
-    st.markdown(f"## Recherche société — {profile.name}")
+    page_header("Recherche société", profile)
     if profile.description:
         st.markdown(f'<div class="erai-quote">{profile.description}</div>', unsafe_allow_html=True)
 
@@ -821,7 +892,7 @@ def page_statements() -> None:
         return
     dataset = get_dataset(profile.company_id)
 
-    st.markdown(f"## États financiers — {profile.name}")
+    page_header("États financiers", profile, subtitle="Comptes annuels, ratios et provenance de chaque poste.")
     simulated_banner(dataset)
 
     with st.expander("📥 Charger / compléter les données", expanded=not dataset.observations):
@@ -1366,9 +1437,8 @@ def page_valuation() -> None:
         st.info("Sélectionnez une société dans la barre latérale.")
         return
     dataset = get_dataset(profile.company_id)
+    page_header("Valorisation", profile, subtitle="DCF FCFF : scénarios, sensibilités et pont valeur d'entreprise → fonds propres.")
     simulated_banner(dataset)
-
-    st.markdown(f"## Valorisation — {profile.name}")
     if not dataset.observations:
         st.warning(
             "Aucune donnée financière chargée : le DCF ne peut pas être calculé. "
@@ -1842,7 +1912,7 @@ def page_comparables() -> None:
         st.info("Sélectionnez une société dans la barre latérale.")
         return
     dataset = get_dataset(profile.company_id)
-    st.markdown(f"## Comparables — {profile.name}")
+    page_header("Comparables", profile, subtitle="Multiples de pairs, médianes et valeurs implicites.")
     simulated_banner(dataset)
 
     if not dataset.observations:
@@ -2161,7 +2231,7 @@ def _multiples_figure(stored: Dict[str, Any]):
 
 def page_assistant() -> None:
     profile = current_profile()
-    st.markdown("## Assistant IA")
+    page_header("Assistant IA", title="Assistant de recherche", subtitle="Questions en langage naturel ; les chiffres viennent des outils de calcul, jamais du modèle.")
     app_settings = settings()
 
     if not app_settings.ai_enabled:
@@ -2359,7 +2429,7 @@ def page_sources() -> None:
         st.info("Sélectionnez une société dans la barre latérale.")
         return
     dataset = get_dataset(profile.company_id)
-    st.markdown(f"## Sources et qualité des données — {profile.name}")
+    page_header("Sources et qualité des données", profile)
     simulated_banner(dataset)
 
     sources = repo.list_sources(db(), profile.company_id)
@@ -2600,7 +2670,7 @@ def _source_form(profile: CompanyProfile) -> None:
 # ==========================================================================
 
 def page_settings() -> None:
-    st.markdown("## Paramètres")
+    page_header("Paramètres", title="Configuration", subtitle="Fournisseurs, stockage et préférences de l'application.")
     app_settings = settings()
 
     st.markdown("### État de la configuration")

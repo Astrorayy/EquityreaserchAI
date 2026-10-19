@@ -1,13 +1,35 @@
-# Streamlit configuration — "research terminal" look.
-# Dark base, restrained accent colours, no telemetry.
+# Streamlit configuration - Canva-style light app look.
+# White cards on a very light canvas, purple/turquoise brand, Plus Jakarta Sans.
 
 [theme]
-base = "dark"
-primaryColor = "#4c8dff"
-backgroundColor = "#0b1220"
-secondaryBackgroundColor = "#111a2e"
-textColor = "#e2e8f0"
-font = "sans serif"
+base = "light"
+primaryColor = "#7d2ae8"
+backgroundColor = "#f6f7fb"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0e1318"
+linkColor = "#7d2ae8"
+font = "Plus Jakarta Sans:https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+headingFont = "Plus Jakarta Sans:https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
+headingFontWeights = [800, 700, 650, 600, 600, 600]
+baseFontSize = 14
+baseRadius = "12px"
+buttonRadius = "10px"
+borderColor = "#e3e6ef"
+dataframeBorderColor = "#eceef5"
+dataframeHeaderBackgroundColor = "#f6f7fb"
+showWidgetBorder = true
+showSidebarBorder = true
+codeBackgroundColor = "#f3f4f8"
+redColor = "#d93654"
+greenColor = "#0f9d58"
+blueColor = "#3b82f6"
+chartCategoricalColors = ["#7d2ae8", "#00c4cc", "#ff7a59", "#ffb020", "#22c55e", "#3b82f6"]
+
+[theme.sidebar]
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f6f7fb"
+borderColor = "#e8eaf2"
 
 [server]
 headless = true
