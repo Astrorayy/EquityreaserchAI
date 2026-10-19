@@ -264,7 +264,19 @@ def simulated_banner(dataset: FinancialDataSet) -> None:
 def render_sidebar() -> str:
     with st.sidebar:
         st.markdown("### ◮ Equity Research AI")
-        st.caption("Plateforme locale d'analyse actions — Managem · SanDisk")
+        st.caption("Analyse actions — toute société cotée (Managem et SanDisk préconfigurées)")
+
+        # A company added below is selected on the next run: a widget's state
+        # cannot be changed once the widget has been drawn in the current run.
+        if st.session_state.pop("_reset_company", False):
+            st.session_state.pop("company_id", None)
+            st.session_state.pop("company_selector", None)
+        pending = st.session_state.pop("_pending_company", None)
+        if pending:
+            st.session_state["company_id"] = pending
+            st.session_state.pop("company_selector", None)
+            for key in ("valuation_result", "multiples_result", "sec_filings"):
+                st.session_state.pop(key, None)
 
         # --- company selector ------------------------------------------
         database = db()
@@ -289,14 +301,19 @@ def render_sidebar() -> str:
             labels,
             index=index,
             key="company_selector",
-            help="Sociétés vérifiées dans le registre, plus toute société que vous avez créée.",
+            help="Sociétés vérifiées dans le registre, plus toute société que vous avez ajoutée.",
         )
         selected_id = options[selected_label]
         if selected_id != current:
             st.session_state["company_id"] = selected_id
-            st.session_state.pop("valuation_result", None)
-            st.session_state.pop("multiples_result", None)
+            for key in ("valuation_result", "multiples_result", "sec_filings"):
+                st.session_state.pop(key, None)
             st.rerun()
+
+        with st.expander("🔎 Rechercher une autre société"):
+            _company_finder()
+        with st.expander("✍️ Ajouter une société manuellement"):
+            _manual_company_form()
 
         profile = current_profile()
         dataset = get_dataset(selected_id) if selected_id else None
@@ -352,6 +369,111 @@ def render_sidebar() -> str:
 
 def _company_label(profile: CompanyProfile) -> str:
     return f"{profile.name} ({profile.ticker})" if profile.ticker else profile.name
+
+
+def _company_finder() -> None:
+    """Search any listed company (SEC official table + Yahoo worldwide)."""
+    from data_sources import company_discovery as cd
+
+    with st.form("company_search_form"):
+        query = st.text_input("Nom ou ticker", placeholder="ex. Airbus, NVDA, LVMH, Micron")
+        international = st.checkbox(
+            "Inclure les places hors US (Yahoo, non officiel)", value=True
+        )
+        submitted = st.form_submit_button("Rechercher")
+    if submitted:
+        with st.spinner("Recherche des sociétés…"):
+            try:
+                st.session_state["company_search"] = cd.search_companies(
+                    query, limit=8, include_international=international
+                )
+            except Exception as exc:  # network-dependent: surfaced, never hidden
+                logger.warning("Recherche de société échouée : %s", exc)
+                st.error(f"Recherche impossible : {exc}")
+                st.session_state.pop("company_search", None)
+
+    result = st.session_state.get("company_search")
+    if result is None:
+        st.caption(
+            "Sources : table officielle SEC (sociétés cotées aux États-Unis, import "
+            "automatique des comptes) et Yahoo Finance (autres places, identité à vérifier)."
+        )
+        return
+    for error in result.errors:
+        st.caption(f"⚠ {error}")
+    if not result.candidates:
+        st.info(
+            "Aucune société trouvée. Pour une place non couverte (ex. Bourse de "
+            "Casablanca), utilisez l'ajout manuel."
+        )
+        return
+    labels = [candidate.label for candidate in result.candidates]
+    choice = st.selectbox(
+        "Résultats",
+        list(range(len(labels))),
+        format_func=lambda i: labels[i],
+        key="company_search_choice",
+    )
+    candidate = result.candidates[int(choice)]
+    st.caption(
+        f"{candidate.source} · {candidate.country or 'pays à vérifier'} · "
+        f"{candidate.currency.value} · {candidate.sector or 'secteur non renseigné'}"
+    )
+    if st.button("➕ Ajouter et ouvrir", key="company_add", type="primary"):
+        if candidate.sec_cik:
+            with st.spinner("Lecture de l'identité officielle (SEC)…"):
+                candidate = cd.enrich_from_sec(candidate)
+        _add_company(cd.candidate_to_profile(candidate))
+
+
+def _manual_company_form() -> None:
+    """Create a company no search source covers (e.g. Casablanca listings)."""
+    from data_sources import company_discovery as cd
+
+    with st.form("manual_company_form"):
+        name = st.text_input("Nom de la société *")
+        ticker = st.text_input("Ticker / code *", placeholder="ex. ATW")
+        exchange = st.text_input("Place de cotation", placeholder="ex. Bourse de Casablanca")
+        country = st.text_input("Pays", placeholder="ex. Maroc")
+        currency = st.selectbox("Devise de reporting", [c.value for c in Currency])
+        sector = st.text_input("Secteur", placeholder="ex. Banques")
+        fiscal_year_end = st.text_input("Clôture d'exercice (MM-JJ)", value="12-31")
+        submitted = st.form_submit_button("Ajouter et ouvrir")
+    if not submitted:
+        return
+    if not name.strip() or not ticker.strip():
+        st.error("Le nom et le ticker sont obligatoires.")
+        return
+    candidate = cd.manual_candidate(
+        name=name,
+        ticker=ticker,
+        exchange=exchange,
+        country=country,
+        currency=Currency(currency),
+        sector=sector,
+        fiscal_year_end=fiscal_year_end,
+    )
+    _add_company(cd.candidate_to_profile(candidate))
+
+
+def _add_company(profile: CompanyProfile) -> None:
+    """Store a new company (or reopen it if already known) and select it."""
+    if not profile.company_id:
+        st.error("Ticker invalide : impossible de créer un identifiant.")
+        return
+    database = db()
+    known = list_profiles() + repo.list_companies(database)
+    for existing in known:
+        same_cik = bool(profile.sec_cik) and existing.sec_cik == profile.sec_cik
+        same_ticker = existing.ticker.upper() == profile.ticker.upper() and existing.exchange == profile.exchange
+        if existing.company_id == profile.company_id or same_cik or same_ticker:
+            st.session_state["_pending_company"] = existing.company_id
+            st.session_state.pop("company_search", None)
+            st.rerun()
+    repo.upsert_company(database, profile)
+    st.session_state["_pending_company"] = profile.company_id
+    st.session_state.pop("company_search", None)
+    st.rerun()
 
 
 def _sidebar_status() -> None:
@@ -544,6 +666,25 @@ def page_research() -> None:
     if profile.description:
         st.markdown(f'<div class="erai-quote">{profile.description}</div>', unsafe_allow_html=True)
 
+    user_added = get_profile(profile.company_id) is None
+    if user_added:
+        next_step = (
+            "importez les comptes publiés via **États financiers → SEC EDGAR**"
+            if profile.sec_cik
+            else "importez un rapport annuel PDF ou saisissez les comptes dans **États financiers**"
+        )
+        col_info, col_remove = st.columns([4, 1])
+        with col_info:
+            st.info(
+                f"Société ajoutée par vous. Prochaine étape : {next_step}. "
+                "Vérifiez l'identité ci-dessous dans les documents officiels."
+            )
+        with col_remove:
+            if st.button("Retirer de la liste", key=f"remove_{profile.company_id}"):
+                repo.delete_company(db(), profile.company_id)
+                st.session_state["_reset_company"] = True
+                st.rerun()
+
     left, right = st.columns([3, 2])
     with left:
         st.markdown("### Identité et périmètre")
@@ -568,7 +709,7 @@ def page_research() -> None:
 
     with right:
         st.markdown("### Risques sectoriels documentés")
-        risks, methods = workflows.sector_context(profile.company_id)
+        risks, methods = workflows.sector_context(profile.company_id, profile)
         if risks:
             for risk in risks:
                 st.markdown(f"- {risk}")

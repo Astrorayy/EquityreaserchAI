@@ -1,8 +1,26 @@
-# Equity Research AI — Managem / SanDisk
+# Equity Research AI
 
 Application locale de recherche actions (Python + Streamlit) pour analyser et valoriser
+**n'importe quelle société cotée**. Deux profils sont préconfigurés et vérifiés :
 **Managem** (Bourse de Casablanca) et **SanDisk Corporation** (Nasdaq : SNDK).
 Interface en français, code et documentation en anglais.
+
+### Ajouter une société
+
+Dans la barre latérale :
+
+- **🔎 Rechercher une autre société** — par nom ou ticker. Deux sources sans clé :
+  - la **table officielle SEC** (toutes les sociétés enregistrées aux États-Unis) : le
+    CIK est récupéré, ce qui permet l'**import automatique des comptes publiés**
+    (page États financiers → SEC EDGAR) ;
+  - **Yahoo Finance** (non officiel) pour les autres places (Paris, Francfort, Londres,
+    Toronto…) : identité, devise et place sont **à vérifier** et signalées comme telles ;
+    les comptes s'importent ensuite par PDF ou saisie.
+- **✍️ Ajouter une société manuellement** — pour une place non couverte (ex. Bourse de
+  Casablanca) : nom, ticker, place, pays, devise, secteur, clôture d'exercice.
+
+Une société ajoutée peut être retirée depuis la page **Recherche société** (ses données
+sont conservées et réapparaissent si elle est ajoutée à nouveau).
 
 L'application fonctionne **sans clé API et sans connexion Internet** : les comptes peuvent
 être saisis manuellement ou chargés depuis un jeu de démonstration explicite. Les

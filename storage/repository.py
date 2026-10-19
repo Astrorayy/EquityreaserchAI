@@ -78,6 +78,19 @@ def get_company(db: Database, company_id: str) -> Optional[CompanyProfile]:
     return CompanyProfile.model_validate(raw) if raw else None
 
 
+def delete_company(db: Database, company_id: str) -> bool:
+    """Remove a company from the list.
+
+    Its observations, sources and valuations are kept: re-adding the same
+    company brings them back, and nothing published is lost by a misclick.
+    """
+    with db.connect() as conn:
+        deleted = conn.execute(
+            "DELETE FROM companies WHERE company_id = ?", (company_id,)
+        ).rowcount
+    return bool(deleted)
+
+
 # --------------------------------------------------------------------------
 # Sources
 # --------------------------------------------------------------------------

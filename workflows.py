@@ -575,23 +575,30 @@ def ratio_metrics(dataset: FinancialDataSet, period: Optional[str] = None) -> Di
         return {}
 
 
-def sector_context(company_id: str) -> Tuple[List[str], List[str]]:
-    """Sector risks and recommended methods for the registry's known sectors."""
-    from data_sources.company_registry import get_profile
+def sector_context(company_id: str, profile=None) -> Tuple[List[str], List[str]]:
+    """Sector risks and recommended methods, for registry or user-added companies."""
+    if profile is None:
+        from data_sources.company_registry import get_profile
 
-    profile = get_profile(company_id)
-    sector = (profile.sector if profile else None) or "generic"
+        profile = get_profile(company_id)
+    sector = " ".join(
+        filter(None, [getattr(profile, "sector", None), getattr(profile, "industry", None)])
+    ) or "generic"
     key = _sector_key(sector)
     risks = list(SECTOR_RISKS.get(key, SECTOR_RISKS.get("generic", [])))
     methods = list(RECOMMENDED_METHODS.get(key, RECOMMENDED_METHODS.get("generic", [])))
     return risks, methods
 
 
+_MINING_HINTS = ("mine", "minier", "miniere", "mining", "metal", "métal", "gold", "copper", "cuivre")
+_SEMI_HINTS = ("semi", "memory", "mémoire", "memoire", "storage", "stockage")
+
+
 def _sector_key(sector: str) -> str:
     lowered = (sector or "").lower()
-    if "min" in lowered or "metal" in lowered:
+    if any(hint in lowered for hint in _MINING_HINTS):
         return "mining"
-    if "semi" in lowered or "memory" in lowered or "storage" in lowered:
+    if any(hint in lowered for hint in _SEMI_HINTS):
         return "semiconductors"
     return "generic"
 
